@@ -58,7 +58,7 @@
                 "computerName": "[parameters('vmName')]",
                 "adminUserName": "[parameters('SSHUserName')]",
                 "linuxConfiguration": {
-                        "disablePasswordAuthentication": "true",
+                        "disablePasswordAuthentication": true,
                         "ssh": {
                             "publicKeys": [
                                 {
