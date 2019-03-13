@@ -28,6 +28,7 @@
     }
   },
   "variables": {
+    "RoleContributor": "[concat('/subscriptions/',subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', 'b24988ac-6180-42a0-ab88-20f7382dd24c')]",
 	"sshKeyPath": "[concat('/home/',parameters('SSHUserName'),'/.ssh/authorized_keys')]"
   },
   "resources": [
@@ -83,6 +84,23 @@
                     }
                 }]
             }
+        },
+        "identity": {
+          "type": "SystemAssigned"
         }
-    }]
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2017-05-01",
+      "name": "[guid(resourceGroup().id, parameters('vmName'))]",
+      "dependsOn": [
+        "[parameters('vmName')]"
+      ],
+      "properties": {
+        "roleDefinitionId": "[variables('RoleContributor')]",
+        "principalId": "[reference(parameters('vmName'), '2018-04-01', 'Full').identity.principalId]",
+        "scope": "[resourceGroup().id]"
+      }
+    }
+  ]
 }
