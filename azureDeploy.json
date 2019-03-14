@@ -50,8 +50,7 @@
       "type": "string",
       "metadata": {
         "description": "The source of the generalized blob containing the custom image"
-      },
-      "defaultValue": "https://swvhddemo.blob.core.windows.net/vhds/SonicWall_NSv__For_Microsoft_Azure__HA.vhd"
+      }
     },
     "managementAccessIPSource": {
       "type": "string",
