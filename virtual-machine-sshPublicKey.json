@@ -8,7 +8,13 @@
     "vmName": {
       "type": "string"
     },
-    "imageId": {
+    "imageSku": {
+      "type": "string"
+    },
+    "imageOffer": {
+      "type": "string"
+    },
+    "imagePublisher": {
       "type": "string"
     },
     "nicName": {
@@ -37,6 +43,11 @@
         "type": "Microsoft.Compute/virtualMachines",
         "name": "[parameters('vmName')]",
         "location": "[parameters('location')]",
+        "plan": {
+          "name": "[parameters('imageSku')]",
+          "product": "[parameters('imageOffer')]",
+          "publisher": "[parameters('imagePublisher')]"
+       },
         "properties": {
             "hardwareProfile": {
                 "vmSize": "[parameters('vmSize')]"
@@ -58,7 +69,10 @@
             },
             "storageProfile": {
                 "imageReference": {
-                    "id": "[parameters('imageId')]"
+                    "publisher": "[parameters('imagePublisher')]",
+                    "offer": "[parameters('imageOffer')]",
+                    "sku": "[parameters('imageSku')]",
+                    "version": "latest"
                 },
                 "osDisk": {
                     "caching": "ReadWrite",
