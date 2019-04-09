@@ -664,6 +664,7 @@
       "name": "[concat(variables('HA2NicName'), '-X1')]",
       "location": "[parameters('location')]",
       "dependsOn": [
+        "[concat(variables('HA1NicName'), '-X1')]",
         "[parameters('HA2PublicIpName')]",
         "[parameters('virtualNetworkName')]",
         "[variables('nsgname-mgmt')]"
@@ -693,6 +694,7 @@
       "name": "[concat(variables('HA2NicName'), '-X0')]",
       "location": "[parameters('location')]",
       "dependsOn": [
+        "[concat(variables('HA1NicName'), '-X0')]",
         "[parameters('virtualNetworkName')]"
       ],
       "tags": {
@@ -719,6 +721,7 @@
       "name": "[concat(variables('HA2NicName'), '-X2')]",
       "location": "[parameters('location')]",
       "dependsOn": [
+        "[concat(variables('HA1NicName'), '-X2')]",
         "[parameters('virtualNetworkName')]"
       ],
       "tags": {
