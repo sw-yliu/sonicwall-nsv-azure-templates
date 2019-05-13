@@ -108,7 +108,7 @@
       "metadata": {
         "artifactsBaseUrl": ""
       },
-      "defaultValue": "https://raw.githubusercontent.com/sonicwall/sonicwall-nsv-azure-templates/master"
+      "defaultValue": "https://raw.githubusercontent.com/sonicwall/sonicwall-nsv-azure-templates/feature/HA-AZLB"
     },
     "virtualNetworkNewOrExisting": {
       "type": "string",
@@ -196,9 +196,8 @@
     },
     "publicIpAllocationMethod": {
       "type": "string",
-      "defaultValue": "Dynamic",
+      "defaultValue": "Static",
       "allowedValues": [
-        "Dynamic",
         "Static"
       ],
       "metadata": {
@@ -207,13 +206,23 @@
     },
     "publicIpSku": {
       "type": "string",
-      "defaultValue": "Basic",
+      "defaultValue": "Standard",
       "allowedValues": [
-        "Basic",
         "Standard"
       ],
       "metadata": {
         "description": "Name of the resource group for the public ip address"
+      }
+    },
+    "createInternalLoadBalancer": {
+      "type": "string",
+      "defaultValue": "No",
+      "allowedValues": [
+        "Yes",
+        "No"
+      ],
+      "metadata": {
+        "description": "Create internal Load Balancer for inner initialized traffic"
       }
     }
   },
@@ -221,13 +230,20 @@
     "imagePublisher": "sonicwall-inc",
     "imageSku" : "[concat('snwl-nsv-',parameters('imageSkuType'))]",
     "imageOffer" : "sonicwall-nsz-azure",
-    "nicName": "[concat(parameters('vmName'), '-interface')]",
+    "vm1Name": "[concat(parameters('vmName'), '-HA1')]",
+    "vm2Name": "[concat(parameters('vmName'), '-HA2')]",
+    "vm1NicName": "[concat(variables('vm1Name'), '-interface')]",
+    "vm2NicName": "[concat(variables('vm2Name'), '-interface')]",
     "publicIPAddressType": "Dynamic",
     "nsgname-mgmt": "[concat(parameters('vmName'), '-NSG')]",
-    "publicIpAddressId": {
-      "id": "[resourceId(parameters('publicIpResourceGroupName'), 'Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]"
-    },
-    "vmTemplateUrl": "[concat(parameters('baseUrl'), '/virtual-machine-', parameters('authenticationType'),'.json')]"
+    "publicIpAddressId": "[resourceId(parameters('publicIpResourceGroupName'), 'Microsoft.Network/publicIPAddresses', parameters('publicIpName'))]",
+    "elbName": "[concat(parameters('vmName'), '-ELB')]",
+    "elbID": "[resourceId('Microsoft.Network/loadBalancers',variables('elbName'))]",
+    "elbPoolID": "[concat(variables('elbID'),'/backendAddressPools/BackendPool1')]",
+    "elbProbeID": "[concat(variables('elbID'),'/probes/tcpProbe')]",
+    "elbFrontEndIPConfigID": "[concat(variables('elbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
+    "vmTemplateUrl": "[concat(parameters('baseUrl'), '/virtual-machine-', parameters('authenticationType'),'.json')]",
+    "ilbTemplateUrl": "[concat(parameters('baseUrl'), '/append-internal-lb.json')]"
   },
   "resources": [
     {
@@ -414,12 +430,98 @@
       }
     },
     {
+      "apiVersion": "2018-11-01",
+      "name": "[variables('elbName')]",
+      "type": "Microsoft.Network/loadBalancers",
+      "location": "[resourceGroup().location]",
+      "dependsOn": [
+        "[concat('Microsoft.Network/publicIPAddresses/', parameters('publicIpName'))]"
+      ],
+      "sku": {
+        "name": "Standard"
+      },
+      "properties": {
+        "frontendIPConfigurations": [
+          {
+            "name": "LoadBalancerFrontEnd",
+            "properties": {
+              "publicIPAddress": {
+                "id": "[variables('publicIpAddressId')]"
+              }
+            }
+          }
+        ],
+        "backendAddressPools": [
+          {
+            "name": "BackendPool1"
+          }
+        ],
+        "inboundNatRules": [
+          {
+            "name": "HTTPS-FW-HA1",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('elbFrontEndIPConfigID')]"
+              },
+              "protocol": "Tcp",
+              "frontendPort": 8443,
+              "backendPort": 443,
+              "enableFloatingIP": false
+            }
+          },
+          {
+            "name": "HTTPS-FW-HA2",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('elbFrontEndIPConfigID')]"
+              },
+              "protocol": "Tcp",
+              "frontendPort": 8444,
+              "backendPort": 443,
+              "enableFloatingIP": false
+            }
+          }
+        ],
+        "loadBalancingRules": [
+          {
+            "name": "ELBRule",
+            "properties": {
+              "frontendIPConfiguration": {
+                "id": "[variables('elbFrontEndIPConfigID')]"
+              },
+              "backendAddressPool": {
+                "id": "[variables('elbPoolID')]"
+              },
+              "protocol": "Tcp",
+              "frontendPort": 3389,
+              "backendPort": 3389,
+              "enableFloatingIP": false,
+              "idleTimeoutInMinutes": 5,
+              "probe": {
+                "id": "[variables('elbProbeID')]"
+              }
+            }
+          }
+        ],
+        "probes": [
+          {
+            "name": "tcpProbe",
+            "properties": {
+              "protocol": "Tcp",
+              "port": 443,
+              "intervalInSeconds": 5,
+              "numberOfProbes": 2
+            }
+          }
+        ]
+      }
+    },
+    {
       "apiVersion": "2018-04-01",
       "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(variables('nicName'), '-X1')]",
+      "name": "[concat(variables('vm1NicName'), '-X1')]",
       "location": "[parameters('location')]",
       "dependsOn": [
-        "[parameters('publicIpName')]",
         "[parameters('virtualNetworkName')]",
         "[variables('nsgname-mgmt')]"
       ],
@@ -433,10 +535,19 @@
             "name": "[concat('ipconfig', '1')]",
             "properties": {
               "privateIPAllocationMethod": "Dynamic",
-	      "publicIPAddress": "[if(not(equals(parameters('publicIpNewOrExisting'), 'none')), variables('publicIpAddressId') , json('null'))]",
               "subnet": {
                 "id": "[resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks/subnets/', parameters('virtualNetworkName'), parameters('subnetWANName'))]" 
-              }
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[concat(variables('elbID'), '/backendAddressPools/BackendPool1')]"
+                }
+              ],
+              "loadBalancerInboundNatRules": [
+                {
+                  "id": "[concat(variables('elbID'),'/inboundNatRules/HTTPS-FW-HA1')]"
+                }
+              ]
             }
           }
         ]
@@ -445,7 +556,7 @@
     {
       "apiVersion": "2018-04-01",
       "type": "Microsoft.Network/networkInterfaces",
-      "name": "[concat(variables('nicName'), '-X0')]",
+      "name": "[concat(variables('vm1NicName'), '-X0')]",
       "location": "[parameters('location')]",
       "dependsOn": [
         "[parameters('virtualNetworkName')]"
@@ -469,13 +580,76 @@
       }
     },
     {
-      "name": "SonicWall-NSv-VM",
+      "apiVersion": "2018-04-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('vm2NicName'), '-X1')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[parameters('virtualNetworkName')]",
+        "[variables('nsgname-mgmt')]"
+      ],
+      "tags": {
+        "displayName": "[concat('NetworkInterfaces', '-X1')]"
+      },
+      "properties": {
+        "enableIPForwarding": true,
+        "ipConfigurations": [
+          {
+            "name": "[concat('ipconfig', '1')]",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks/subnets/', parameters('virtualNetworkName'), parameters('subnetWANName'))]" 
+              },
+              "loadBalancerBackendAddressPools": [
+                {
+                  "id": "[concat(variables('elbID'), '/backendAddressPools/BackendPool1')]"
+                }
+              ],
+              "loadBalancerInboundNatRules": [
+                {
+                  "id": "[concat(variables('elbID'),'/inboundNatRules/HTTPS-FW-HA2')]"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2018-04-01",
+      "type": "Microsoft.Network/networkInterfaces",
+      "name": "[concat(variables('vm2NicName'), '-X0')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[parameters('virtualNetworkName')]"
+      ],
+      "tags": {
+        "displayName": "[concat('NetworkInterfaces', '-X0')]"
+      },
+      "properties": {
+        "enableIPForwarding": true,
+        "ipConfigurations": [
+          {
+            "name": "[concat('ipconfig', '2')]",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[resourceId(parameters('virtualNetworkResourceGroupName'), 'Microsoft.Network/virtualNetworks/subnets/', parameters('virtualNetworkName'), parameters('subnetLANName'))]"  
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "SonicWall-NSv-VM1",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2018-05-01",
       "dependsOn": [
         "[parameters('storageAccount')]",
-        "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'), '-X1')]",
-        "[concat('Microsoft.Network/networkInterfaces/', variables('nicName'), '-X0')]"
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm1NicName'), '-X1')]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm1NicName'), '-X0')]"
       ],
       "properties": {
         "mode": "Incremental",
@@ -488,7 +662,7 @@
             "value": "[parameters('location')]"
           },
           "vmName": {
-            "value": "[parameters('vmName')]"
+            "value": "[variables('vm1Name')]"
           },
           "imageSku": {
             "value": "[variables('imageSku')]"
@@ -500,7 +674,7 @@
             "value": "[variables('imagePublisher')]"
           },
           "nicName": {
-            "value": "[variables('nicName')]"
+            "value": "[variables('vm1NicName')]"
           },
           "vmSize": {
             "value": "[parameters('vmSize')]"
@@ -516,6 +690,92 @@
           },
           "sshKey": {
             "value": "[parameters('sshKey')]"
+          }
+        }
+      }
+    },
+    {
+      "name": "SonicWall-NSv-VM2",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "dependsOn": [
+        "[parameters('storageAccount')]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm2NicName'), '-X1')]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm2NicName'), '-X0')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('vmTemplateUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[variables('vm2Name')]"
+          },
+          "imageSku": {
+            "value": "[variables('imageSku')]"
+          },
+          "imageOffer": {
+            "value": "[variables('imageOffer')]"
+          },
+          "imagePublisher": {
+            "value": "[variables('imagePublisher')]"
+          },
+          "nicName": {
+            "value": "[variables('vm2NicName')]"
+          },
+          "vmSize": {
+            "value": "[parameters('vmSize')]"
+          },
+          "SSHUserName": {
+            "value": "[parameters('SSHUserName')]"
+          },
+          "SSHPassword": {
+            "value": "[parameters('SSHPassword')]"
+          },
+          "storageAccount": {
+            "value": "[parameters('storageAccount')]"
+          },
+          "sshKey": {
+            "value": "[parameters('sshKey')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[equals(parameters('createInternalLoadBalancer'), 'Yes')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "name": "CreateInternalLoadBalancer",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm1NicName'), '-X0')]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm2NicName'), '-X0')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('ilbTemplateUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[parameters('vmName')]"
+          },
+          "virtualNetworkResourceGroupName": {
+            "value": "[parameters('virtualNetworkResourceGroupName')]"
+          },
+          "virtualNetworkName": {
+            "value": "[parameters('virtualNetworkName')]"
+          },
+          "subnetLANName": {
+            "value": "[parameters('subnetLANName')]"
           }
         }
       }
