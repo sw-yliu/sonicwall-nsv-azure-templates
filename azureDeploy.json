@@ -213,6 +213,17 @@
       "metadata": {
         "description": "Name of the resource group for the public ip address"
       }
+    },
+    "createInternalLoadBalancer": {
+      "type": "string",
+      "defaultValue": "No",
+      "allowedValues": [
+        "Yes",
+        "No"
+      ],
+      "metadata": {
+        "description": "Create internal Load Balancer for inner initialized traffic"
+      }
     }
   },
   "variables": {
@@ -231,12 +242,8 @@
     "elbPoolID": "[concat(variables('elbID'),'/backendAddressPools/BackendPool1')]",
     "elbProbeID": "[concat(variables('elbID'),'/probes/tcpProbe')]",
     "elbFrontEndIPConfigID": "[concat(variables('elbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
-    "ilbName": "[concat(parameters('vmName'), '-ILB')]",
-    "ilbID": "[resourceId('Microsoft.Network/loadBalancers',variables('ilbName'))]",
-    "ilbPoolID": "[concat(variables('ilbID'),'/backendAddressPools/BackendPool1')]",
-    "ilbProbeID": "[concat(variables('ilbID'),'/probes/tcpProbe')]",
-    "ilbFrontEndIPConfigID": "[concat(variables('ilbID'),'/frontendIPConfigurations/LoadBalancerFrontEnd')]",
-    "vmTemplateUrl": "[concat(parameters('baseUrl'), '/virtual-machine-', parameters('authenticationType'),'.json')]"
+    "vmTemplateUrl": "[concat(parameters('baseUrl'), '/virtual-machine-', parameters('authenticationType'),'.json')]",
+    "ilbTemplateUrl": "[concat(parameters('baseUrl'), '/append-internal-lb.json')]"
   },
   "resources": [
     {
@@ -735,6 +742,40 @@
           },
           "sshKey": {
             "value": "[parameters('sshKey')]"
+          }
+        }
+      }
+    },
+    {
+      "condition": "[equals(parameters('createInternalLoadBalancer'), 'Yes')]",
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2018-05-01",
+      "name": "CreateInternalLoadBalancer",
+      "dependsOn": [
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm1NicName'), '-X0')]",
+        "[concat('Microsoft.Network/networkInterfaces/', variables('vm2NicName'), '-X0')]"
+      ],
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri": "[variables('ilbTemplateUrl')]",
+          "contentVersion": "1.0.0.0"
+        },
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "vmName": {
+            "value": "[parameters('vmName')]"
+          },
+          "virtualNetworkResourceGroupName": {
+            "value": "[parameters('virtualNetworkResourceGroupName')]"
+          },
+          "virtualNetworkName": {
+            "value": "[parameters('virtualNetworkName')]"
+          },
+          "subnetLANName": {
+            "value": "[parameters('subnetLANName')]"
           }
         }
       }
