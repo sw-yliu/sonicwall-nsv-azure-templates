@@ -18,8 +18,8 @@ ARM template deployment
 
 Press the "Deploy to Azure" button to load the ARM template into your Azure subscription. 
 
-[![Deploy to Azure](https://azuredeploy.net/deploybutton.png)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsw-yliu%2Fsonicwall-nsv-azure-templates%2Ffeature%2FHA%2FazureDeploy.json)
-[![Visualize](http://armviz.io/visualizebutton.png)](http://armviz.io/#/?load=https%3A%2F%2Fraw.githubusercontent.com%2Fsw-yliu%2Fsonicwall-nsv-azure-templates%2Ffeature%2FHA%2FazureDeploy.json)
+[![Deploy to Azure](https://azuredeploy.net/deploybutton.png)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fsw-yliu%2Fsonicwall-nsv-azure-templates%2FWIP/HA-Classic%2FazureDeploy.json)
+[![Visualize](http://armviz.io/visualizebutton.png)](http://armviz.io/#/?load=https%3A%2F%2Fraw.githubusercontent.com%2Fsw-yliu%2Fsonicwall-nsv-azure-templates%2FWIP%2FHA-Classic%2FazureDeploy.json)
 
 To find out more about ARM templates refer to https://docs.microsoft.com/en-us/azure/azure-resource-manager/resource-group-template-deploy#deploy-with-azure-cli
 
