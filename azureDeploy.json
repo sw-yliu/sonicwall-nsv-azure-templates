@@ -46,11 +46,10 @@
         "description": "SSH rsa public key file as a string."
       }
     },
-    "imageSkuType": {
+    "sourceImageVhdUri": {
       "type": "string",
-      "defaultValue": "beta-q",
       "metadata": {
-        "description": "The type of SKU byol or payg typically"
+        "description": "The source of the generalized blob containing the custom image"
       }
     },
     "managementAccessIPSource": {
@@ -301,9 +300,6 @@
     }
   },
   "variables": {
-    "imagePublisher": "sonicwall-inc",
-    "imageSku" : "[concat('snwl-nsv-',parameters('imageSkuType'))]",
-    "imageOffer" : "sonicwall-nsz-azure",
     "HA1NicName": "[concat(parameters('vmNamePrefix'), '-HA1-interface')]",
     "HA2NicName": "[concat(parameters('vmNamePrefix'), '-HA2-interface')]",
     "nsgname-mgmt": "[concat(parameters('vmNamePrefix'), '-NSG')]",
@@ -743,13 +739,31 @@
       }
     },
     {
+      "type": "Microsoft.Compute/images",
+      "apiVersion": "2016-04-30-preview",
+      "name": "sonicwallNsvHAImage",
+      "condition": "[not(equals(parameters('sourceImageVhdUri'), ''))]",
+      "location": "[resourceGroup().location]",
+      "properties": {
+        "storageProfile": {
+          "osDisk": {
+            "osType": "Linux",
+            "osState": "Generalized",
+            "blobUri": "[parameters('sourceImageVhdUri')]",
+            "storageAccountType": "Standard_LRS"
+          }
+        }
+      }
+    },
+    {
       "name": "SonicWall-NSv-VM-HA1",
       "type": "Microsoft.Resources/deployments",
       "apiVersion": "2018-05-01",
       "dependsOn": [
         "[concat('Microsoft.Network/networkInterfaces/', variables('HA1NicName'), '-X1')]",
         "[concat('Microsoft.Network/networkInterfaces/', variables('HA1NicName'), '-X0')]",
-        "[concat('Microsoft.Network/networkInterfaces/', variables('HA1NicName'), '-X2')]"
+        "[concat('Microsoft.Network/networkInterfaces/', variables('HA1NicName'), '-X2')]",
+        "[concat('Microsoft.Compute/images/', 'sonicwallNsvHAImage')]"
       ],
       "properties": {
         "mode": "Incremental",
@@ -764,14 +778,8 @@
           "vmName": {
             "value": "[concat(parameters('vmNamePrefix'), '-HA1')]"
           },
-          "imageSku": {
-            "value": "[variables('imageSku')]"
-          },
-          "imageOffer": {
-            "value": "[variables('imageOffer')]"
-          },
-          "imagePublisher": {
-            "value": "[variables('imagePublisher')]"
+          "imageId": {
+            "value": "[resourceId('Microsoft.Compute/images', 'sonicwallNsvHAImage')]"
           },
           "nicName": {
             "value": "[variables('HA1NicName')]"
@@ -798,7 +806,8 @@
       "dependsOn": [
         "[concat('Microsoft.Network/networkInterfaces/', variables('HA2NicName'), '-X1')]",
         "[concat('Microsoft.Network/networkInterfaces/', variables('HA2NicName'), '-X0')]",
-        "[concat('Microsoft.Network/networkInterfaces/', variables('HA2NicName'), '-X2')]"
+        "[concat('Microsoft.Network/networkInterfaces/', variables('HA2NicName'), '-X2')]",
+        "[concat('Microsoft.Compute/images/', 'sonicwallNsvHAImage')]"
       ],
       "properties": {
         "mode": "Incremental",
@@ -813,14 +822,8 @@
           "vmName": {
             "value": "[concat(parameters('vmNamePrefix'), '-HA2')]"
           },
-          "imageSku": {
-            "value": "[variables('imageSku')]"
-          },
-          "imageOffer": {
-            "value": "[variables('imageOffer')]"
-          },
-          "imagePublisher": {
-            "value": "[variables('imagePublisher')]"
+          "imageId": {
+            "value": "[resourceId('Microsoft.Compute/images', 'sonicwallNsvHAImage')]"
           },
           "nicName": {
             "value": "[variables('HA2NicName')]"
